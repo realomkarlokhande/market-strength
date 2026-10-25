@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RS Scanner: Nifty 500 relative strength, no login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#14202b;--mute:#5d6b78;--line:#d9e0e6;--up:#0f7b6c;--dn:#b4442e;--acc:#1d4f91;--bar:#cfe6e1}
+@media (prefers-color-scheme:dark){:root{--bg:#10171d;--card:#18222b;--ink:#e6edf2;--mute:#93a3b0;--line:#2a3743;--up:#3fc1a9;--dn:#e5826b;--acc:#7fb0ee;--bar:#1f4a43}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Figtree,system-ui,sans-serif}
+.w{max-width:1040px;margin:0 auto;padding:20px 16px 60px}
+h1{font:700 30px/1.15 'Bricolage Grotesque',sans-serif;margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 18px}
+.note{background:#fff4d6;color:#5a4300;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:13px}
+nav{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:16px}
+nav button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 12px;font:600 14px Figtree;color:var(--mute);cursor:pointer}
+nav button.on{color:var(--ink);border-color:var(--acc)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child,th.l,td.l{text-align:left}
+th{font-size:12px;color:var(--mute);font-weight:600;cursor:pointer;user-select:none}
+tr.r:hover{background:var(--bg);cursor:pointer}
+.up{color:var(--up)}.dn{color:var(--dn)}
+.rs{display:inline-block;min-width:34px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:600;background:var(--bar)}
+.sy{font-weight:600}.nm{color:var(--mute);font-size:12px}
+.star{background:none;border:0;cursor:pointer;font-size:16px;color:var(--mute);padding:0 6px 0 0}.star.on{color:#d49a00}
+.sec{display:grid;grid-template-columns:150px 1fr 90px;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;width:100%;background:none;border-left:0;border-right:0;border-top:0;font:inherit;color:inherit;text-align:left}
+.sec:hover{background:var(--bg)}
+.trk{height:14px;background:var(--bg);border-radius:7px;overflow:hidden}.trk i{display:block;height:100%;background:var(--up)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:20px;padding:6px 13px;font:500 13px Figtree;cursor:pointer}.chip.on{background:var(--ink);color:var(--bg)}
+.back{background:none;border:0;color:var(--acc);font:600 14px Figtree;cursor:pointer;margin-bottom:10px;padding:0}
+.hint{color:var(--mute);font-size:13px;margin:0 0 10px}
+form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+.go{background:var(--acc);color:var(--card);border:0;border-radius:8px;padding:8px 16px;font-weight:600;cursor:pointer}
+#modal{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:16px}
+#modal.on{display:flex}
+#box{background:var(--card);border-radius:12px;max-width:640px;width:100%;padding:18px}
+#box svg{width:100%;height:220px;display:block}
+.stats{display:flex;gap:18px;flex-wrap:wrap;margin:8px 0 10px}.stats b{display:block;font-size:17px}
+.empty{padding:28px;text-align:center;color:var(--mute)}
+footer{margin-top:28px;color:var(--mute);font-size:12px}
+@media(max-width:560px){.sec{grid-template-columns:100px 1fr 60px}.hm{display:none}}
+</style>
+</head>
+<body>
+<div class="w">
+<h1>RS Scanner</h1>
+<p class="sub">Nifty 500 stocks ranked by relative strength. No sign-in. <span id="upd"></span></p>
+<div id="smp" class="note" hidden>You are looking at sample data with made-up companies. Run the data script to load the real Nifty 500.</div>
+<label class="go" style="display:inline-block;margin-bottom:14px;cursor:pointer">Load data file<input id="lf" type="file" accept=".json" hidden></label>
+<nav id="nav"></nav>
+<main id="main"></main>
+<footer>For education and research only. Not investment advice. Rankings are mechanical results of rules applied to past prices, which do not predict future returns. Watchlist and journal are stored only in this browser.</footer>
+</div>
+<div id="modal"><div id="box"></div></div>
+<script>
+const $=s=>document.querySelector(s);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const pct=v=>`<span class="${v>=0?'up':'dn'}">${v>0?'+':''}${v.toFixed(1)}%</span>`;
+const TABS=[['sectors','Sectors'],['rank','RS rankings'],['scans','Scans'],['watch','Watchlist'],['journal','Journal']];
+const SCANS={
+ leaders:['RS leaders','RS rating 90 or higher',s=>s.rs>=90],
+ high:['Near 52-week high','Within 5% of the high, RS 80+',s=>s.hi>=-5&&s.rs>=80],
+ surge:['Volume surge','Volume 2x its 50-day average, up on the day',s=>s.vol>=2&&s.c[s.c.length-1]>s.c[s.c.length-2]],
+ tight:['Tight base','Last 15 closes within 8% range, RS 70+, near highs',s=>{const x=s.c.slice(-15);return s.rs>=70&&s.hi>=-15&&(Math.max(...x)-Math.min(...x))/Math.max(...x)<=.08}]
+};
+let D,tab='sectors',sec=null,sk='rs',sd=-1,scan='leaders',watch=store.get('watch',[]),jr=store.get('journal',[]);
+
+function table(list){
+ if(!list.length)return '<div class="card empty">No stocks match right now.</div>';
+ list=[...list].sort((a,b)=>(a[sk]-b[sk])*sd);
+ const H=(k,t)=>`<th data-sort="${k}">${t}${sk===k?(sd<0?' ▾':' ▴'):''}</th>`;
+ return `<div class="card"><table><tr><th class="l">Stock</th>${H('rs','RS')}${H('r3','3M')}${H('r6','6M')}${H('r12','12M')}${H('hi','From high')}</tr>`+
+ list.map(s=>`<tr class="r" data-s="${s.s}"><td><button class="star ${watch.includes(s.s)?'on':''}" data-w="${s.s}" aria-label="Watch ${s.s}">${watch.includes(s.s)?'★':'☆'}</button><span class="sy">${s.s}</span> <span class="nm">${s.n}</span></td><td><span class="rs">${s.rs}</span></td><td>${pct(s.r3)}</td><td>${pct(s.r6)}</td><td>${pct(s.r12)}</td><td>${pct(s.hi)}</td></tr>`).join('')+'</table></div>';
+}
+function sectors(){
+ if(sec){const l=D.stocks.filter(s=>s.sec===sec);return `<button class="back" data-back>‹ All sectors</button><h2>${sec}</h2>`+table(l)}
+ const g={};D.stocks.forEach(s=>(g[s.sec]=g[s.sec]||[]).push(s));
+ const r=Object.entries(g).map(([k,v])=>({k,n:v.length,rs:v.reduce((a,s)=>a+s.rs,0)/v.length,r3:v.reduce((a,s)=>a+s.r3,0)/v.length})).sort((a,b)=>b.rs-a.rs);
+ return `<p class="hint">Sectors ranked by average RS rating of their stocks. Click one to see its stocks.</p><div class="card">`+
+ r.map(x=>`<button class="sec" data-sec="${x.k}"><span><b>${x.k}</b><br><span class="nm">${x.n} stocks · ${x.rs>=65?'Leading':x.rs>=50?'Neutral':'Lagging'}</span></span><span class="trk"><i style="width:${x.rs}%"></i></span><span class="hm" style="text-align:right"><b>${x.rs.toFixed(0)}</b> ${pct(x.r3)}</span></button>`).join('')+'</div>';
+}
+function scans(){
+ const [t,d,f]=SCANS[scan];
+ return `<div class="chips">${Object.entries(SCANS).map(([k,v])=>`<button class="chip ${k===scan?'on':''}" data-scan="${k}">${v[0]}</button>`).join('')}</div><p class="hint">${d}</p>`+table(D.stocks.filter(f));
+}
+function watchV(){
+ const l=D.stocks.filter(s=>watch.includes(s.s));
+ return l.length?table(l):'<div class="card empty">Your watchlist is empty. Tap the ☆ next to any stock to add it.</div>';
+}
+function journal(){
+ const opts=D.stocks.map(s=>`<option value="${s.s}">`).join('');
+ const rows=jr.map((e,i)=>{const s=D.stocks.find(x=>x.s===e.s);const pl=s?(s.p/e.p-1)*100:null;
+  return `<tr><td class="l"><b>${e.s}</b><br><span class="nm">${e.d}${e.note?' · '+e.note:''}</span></td><td>${e.p}</td><td>${e.rs??'–'}</td><td>${s?s.p:'–'}</td><td>${pl==null?'–':pct(pl)}</td><td><button class="star" data-del="${i}" aria-label="Delete">✕</button></td></tr>`}).join('');
+ return `<p class="hint">Log a trade with the RS rating it had when you entered.</p><form id="jf"><input name="s" list="sl" placeholder="Symbol" required size="10"><datalist id="sl">${opts}</datalist><input name="p" type="number" step="any" placeholder="Entry price" required><input name="note" placeholder="Note (optional)"><button class="go">Add trade</button></form>`+
+ (jr.length?`<div class="card"><table><tr><th class="l">Trade</th><th>Entry</th><th>RS then</th><th>Now</th><th>P/L</th><th></th></tr>${rows}</table></div>`:'<div class="card empty">No trades logged yet.</div>');
+}
+function render(){
+ $('#nav').innerHTML=TABS.map(([k,t])=>`<button class="${k===tab?'on':''}" data-tab="${k}">${t}</button>`).join('');
+ $('#main').innerHTML=({sectors,rank:()=>table(D.stocks),scans,watch:watchV,journal})[tab]();
+}
+function chart(s){
+ const c=s.c,mn=Math.min(...c),mx=Math.max(...c),W=600,H=200;
+ const pts=c.map((v,i)=>`${(i/(c.length-1)*W).toFixed(1)},${(H-(v-mn)/(mx-mn||1)*(H-10)-5).toFixed(1)}`).join(' ');
+ $('#box').innerHTML=`<div style="display:flex;justify-content:space-between"><div><b style="font-size:20px">${s.s}</b><br><span class="nm">${s.n} · ${s.sec}</span></div><button class="star" data-close style="font-size:20px" aria-label="Close">✕</button></div>
+ <div class="stats"><div><span class="nm">RS rating</span><b>${s.rs}</b></div><div><span class="nm">Price</span><b>${s.p}</b></div><div><span class="nm">3M</span><b>${pct(s.r3)}</b></div><div><span class="nm">12M</span><b>${pct(s.r12)}</b></div><div><span class="nm">From high</span><b>${pct(s.hi)}</b></div></div>
+ <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Price, last ${c.length} sessions"><polyline fill="none" stroke="${c[c.length-1]>=c[0]?'var(--up)':'var(--dn)'}" stroke-width="2" points="${pts}"/></svg><p class="nm">Last ${c.length} trading sessions</p>`;
+ $('#modal').classList.add('on');
+}
+document.addEventListener('click',e=>{
+ const t=e.target.closest('[data-tab],[data-sec],[data-back],[data-scan],[data-sort],[data-w],[data-del],[data-close],tr.r');
+ if(e.target.id==='modal'){$('#modal').classList.remove('on');return}
+ if(!t)return;const d=t.dataset;
+ if(d.w){watch=watch.includes(d.w)?watch.filter(x=>x!==d.w):[...watch,d.w];store.set('watch',watch);render();return}
+ if(d.close!==undefined){$('#modal').classList.remove('on');return}
+ if(d.tab){tab=d.tab;sec=null}
+ else if(d.sec)sec=d.sec;
+ else if(d.back!==undefined)sec=null;
+ else if(d.scan)scan=d.scan;
+ else if(d.sort){sd=sk===d.sort?-sd:-1;sk=d.sort}
+ else if(d.del!==undefined){jr.splice(+d.del,1);store.set('journal',jr)}
+ else if(d.s){chart(D.stocks.find(x=>x.s===d.s));return}
+ render();
+});
+document.addEventListener('submit',e=>{
+ if(e.target.id!=='jf')return;e.preventDefault();
+ const f=new FormData(e.target),sym=f.get('s').toUpperCase().trim(),s=D.stocks.find(x=>x.s===sym);
+ jr.unshift({s:sym,p:+f.get('p'),note:f.get('note'),d:new Date().toISOString().slice(0,10),rs:s?s.rs:null});
+ store.set('journal',jr);render();
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#modal').classList.remove('on')});
+function setData(j){D=j;$('#upd').textContent='Data as of '+j.updated+'.';$('#smp').hidden=!j.sample;render()}
+$('#lf').addEventListener('change',e=>{
+ const f=e.target.files[0];if(!f)return;
+ f.text().then(t=>{const j=JSON.parse(t);if(!j.stocks)throw 0;store.set('data',j);setData(j)}).catch(()=>alert('That file is not a valid data.json'));
+});
+fetch('data.json').then(r=>r.json()).then(j=>{
+ const st=store.get('data',null);
+ setData(st&&st.updated>j.updated?st:j);
+}).catch(()=>{const st=store.get('data',null);if(st)setData(st);else $('#main').innerHTML='<div class="card empty">Could not load data.json. Click "Load data file" above and pick one.</div>'});
+</script>
+</body>
+</html>
