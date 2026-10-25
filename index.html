@@ -46,7 +46,15 @@ input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-r
 .stats{display:flex;gap:18px;flex-wrap:wrap;margin:8px 0 10px}.stats b{display:block;font-size:17px}
 .empty{padding:28px;text-align:center;color:var(--mute)}
 footer{margin-top:28px;color:var(--mute);font-size:12px}
-@media(max-width:560px){.sec{grid-template-columns:100px 1fr 60px}.hm{display:none}}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:16px}
+.kp{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}.kp b{display:block;font:700 20px 'Bricolage Grotesque',sans-serif;margin:2px 0}
+h2{font:700 18px 'Bricolage Grotesque',sans-serif;margin:22px 0 10px}
+.hm2{display:flex;flex-wrap:wrap;gap:6px}
+.tile{min-height:84px;border:0;border-radius:8px;color:#fff;text-align:left;padding:10px 12px;cursor:pointer;font:inherit;display:flex;flex-direction:column;gap:2px}.tile span{font-size:12px;opacity:.9}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
+.brr{display:grid;grid-template-columns:190px 1fr 50px;gap:10px;align-items:center;margin:6px 0}
+.fb{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.fb input{flex:1;min-width:180px}
+@media(max-width:560px){.sec{grid-template-columns:100px 1fr 60px}.hm{display:none}.brr{grid-template-columns:120px 1fr 44px}}
 </style>
 </head>
 <body>
@@ -64,14 +72,14 @@ footer{margin-top:28px;color:var(--mute);font-size:12px}
 const $=s=>document.querySelector(s);
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const pct=v=>`<span class="${v>=0?'up':'dn'}">${v>0?'+':''}${v.toFixed(1)}%</span>`;
-const TABS=[['sectors','Sectors'],['rank','RS rankings'],['scans','Scans'],['watch','Watchlist'],['journal','Journal']];
+const TABS=[['home','Dashboard'],['sectors','Sectors'],['rank','RS rankings'],['scans','Scans'],['watch','Watchlist'],['journal','Journal']];
 const SCANS={
  leaders:['RS leaders','RS rating 90 or higher',s=>s.rs>=90],
  high:['Near 52-week high','Within 5% of the high, RS 80+',s=>s.hi>=-5&&s.rs>=80],
  surge:['Volume surge','Volume 2x its 50-day average, up on the day',s=>s.vol>=2&&s.c[s.c.length-1]>s.c[s.c.length-2]],
  tight:['Tight base','Last 15 closes within 8% range, RS 70+, near highs',s=>{const x=s.c.slice(-15);return s.rs>=70&&s.hi>=-15&&(Math.max(...x)-Math.min(...x))/Math.max(...x)<=.08}]
 };
-let D,tab='sectors',sec=null,sk='rs',sd=-1,scan='leaders',watch=store.get('watch',[]),jr=store.get('journal',[]);
+let D,tab='home',q='',fs='',fr=0,sec=null,sk='rs',sd=-1,scan='leaders',watch=store.get('watch',[]),jr=store.get('journal',[]);
 
 function table(list){
  if(!list.length)return '<div class="card empty">No stocks match right now.</div>';
@@ -102,9 +110,30 @@ function journal(){
  return `<p class="hint">Log a trade with the RS rating it had when you entered.</p><form id="jf"><input name="s" list="sl" placeholder="Symbol" required size="10"><datalist id="sl">${opts}</datalist><input name="p" type="number" step="any" placeholder="Entry price" required><input name="note" placeholder="Note (optional)"><button class="go">Add trade</button></form>`+
  (jr.length?`<div class="card"><table><tr><th class="l">Trade</th><th>Entry</th><th>RS then</th><th>Now</th><th>P/L</th><th></th></tr>${rows}</table></div>`:'<div class="card empty">No trades logged yet.</div>');
 }
+const flt=l=>l.filter(s=>(!q||(s.s+' '+s.n).toLowerCase().includes(q))&&(!fs||s.sec===fs)&&s.rs>=fr);
+function rank(){
+ const secs=[...new Set(D.stocks.map(s=>s.sec))].sort();
+ return `<div class="fb"><input id="q" type="search" placeholder="Search by name or symbol" value="${q.replace(/"/g,'')}" aria-label="Search"><select id="fs" aria-label="Sector"><option value="">All sectors</option>${secs.map(x=>`<option ${x===fs?'selected':''}>${x}</option>`).join('')}</select><select id="fr" aria-label="Minimum RS">${[0,50,70,80,90].map(v=>`<option value="${v}" ${v===fr?'selected':''}>${v?'RS '+v+' and above':'Any RS'}</option>`).join('')}</select></div><div id="tb">${table(flt(D.stocks))}</div>`;
+}
+function home(){
+ const g={};D.stocks.forEach(s=>(g[s.sec]=g[s.sec]||[]).push(s));
+ const S=Object.entries(g).map(([k,v])=>({k,n:v.length,rs:v.reduce((a,s)=>a+s.rs,0)/v.length,r3:v.reduce((a,s)=>a+s.r3,0)/v.length})).sort((a,b)=>b.rs-a.rs);
+ const N=D.stocks.length,cnt=f=>D.stocks.filter(f).length;
+ const ma=s=>{const x=s.c.slice(-50);return s.p>x.reduce((a,b)=>a+b,0)/x.length};
+ const b50=Math.round(cnt(ma)/N*100),mood=b50>=60?'Healthy':b50>=40?'Mixed':'Weak';
+ const br=[['Above 50-day average',b50],['Up over 3 months',Math.round(cnt(s=>s.r3>0)/N*100)],['Within 5% of 52-week high',Math.round(cnt(s=>s.hi>=-5)/N*100)]];
+ const mini=l=>`<div class="card"><table>`+l.map(s=>`<tr class="r" data-s="${s.s}"><td><span class="sy">${s.s}</span> <span class="nm">${s.sec}</span></td><td><span class="rs">${s.rs}</span></td><td>${pct(s.r3)}</td></tr>`).join('')+`</table></div>`;
+ const by3=[...D.stocks].sort((a,b)=>b.r3-a.r3),lead=[...D.stocks].sort((a,b)=>b.rs-a.rs||b.r3-a.r3).slice(0,10);
+ const K=(t,v,s)=>`<div class="kp"><span class="nm">${t}</span><b>${v}</b><span class="nm">${s}</span></div>`;
+ const w=S[S.length-1];
+ return `<div class="kpi">${K('Strongest sector',S[0].k,'Average RS '+S[0].rs.toFixed(0))}${K('Weakest sector',w.k,'Average RS '+w.rs.toFixed(0))}${K('RS 90 and above',cnt(s=>s.rs>=90),'stocks in the top tier')}${K('Market breadth',mood,b50+'% above 50-day average')}</div>
+ <h2>Sector heatmap</h2><div class="hm2">${S.map(x=>`<button class="tile" data-sec="${x.k}" style="flex:${x.n} 1 130px;background:hsl(${(10+x.rs*1.35).toFixed(0)} 50% 34%)"><b>${x.k}</b><span>RS ${x.rs.toFixed(0)} · ${x.n} stocks</span><span>${x.r3>0?'+':''}${x.r3.toFixed(1)}% over 3M</span></button>`).join('')}</div>
+ <h2>Market breadth</h2><div class="card" style="padding:6px 14px">${br.map(([l,p])=>`<div class="brr"><span>${l}</span><span class="trk"><i style="width:${p}%"></i></span><b>${p}%</b></div>`).join('')}</div>
+ <div class="cols"><div><h2>RS leaders</h2>${mini(lead)}</div><div><h2>Top gainers (3M)</h2>${mini(by3.slice(0,10))}</div><div><h2>Top losers (3M)</h2>${mini(by3.slice(-10).reverse())}</div></div>`;
+}
 function render(){
  $('#nav').innerHTML=TABS.map(([k,t])=>`<button class="${k===tab?'on':''}" data-tab="${k}">${t}</button>`).join('');
- $('#main').innerHTML=({sectors,rank:()=>table(D.stocks),scans,watch:watchV,journal})[tab]();
+ $('#main').innerHTML=({home,sectors,rank,scans,watch:watchV,journal})[tab]();
 }
 function chart(s){
  const c=s.c,mn=Math.min(...c),mx=Math.max(...c),W=600,H=200;
@@ -121,7 +150,7 @@ document.addEventListener('click',e=>{
  if(d.w){watch=watch.includes(d.w)?watch.filter(x=>x!==d.w):[...watch,d.w];store.set('watch',watch);render();return}
  if(d.close!==undefined){$('#modal').classList.remove('on');return}
  if(d.tab){tab=d.tab;sec=null}
- else if(d.sec)sec=d.sec;
+ else if(d.sec){sec=d.sec;tab='sectors'}
  else if(d.back!==undefined)sec=null;
  else if(d.scan)scan=d.scan;
  else if(d.sort){sd=sk===d.sort?-sd:-1;sk=d.sort}
@@ -134,6 +163,11 @@ document.addEventListener('submit',e=>{
  const f=new FormData(e.target),sym=f.get('s').toUpperCase().trim(),s=D.stocks.find(x=>x.s===sym);
  jr.unshift({s:sym,p:+f.get('p'),note:f.get('note'),d:new Date().toISOString().slice(0,10),rs:s?s.rs:null});
  store.set('journal',jr);render();
+});
+document.addEventListener('input',e=>{
+ const i=e.target.id;
+ if(i==='q')q=e.target.value.toLowerCase();else if(i==='fs')fs=e.target.value;else if(i==='fr')fr=+e.target.value;else return;
+ $('#tb').innerHTML=table(flt(D.stocks));
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#modal').classList.remove('on')});
 function setData(j){D=j;$('#upd').textContent='Data as of '+j.updated+'.';$('#smp').hidden=!j.sample;render()}
